@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 
 const SERVICE = 'search-service';
-const VERSION = '1.0.0';
+const VERSION = 'V2';
 const PORT = Number(process.env.PORT || 3002);
 
 const app = express();
