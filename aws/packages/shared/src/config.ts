@@ -12,7 +12,6 @@ export function getConfig(): AppConfig {
     analyticsQueueUrl: process.env.ANALYTICS_QUEUE_URL || '',
     offerPublishedTopicArn: process.env.OFFER_PUBLISHED_TOPIC_ARN || '',
     paymentCompletedTopicArn: process.env.PAYMENT_COMPLETED_TOPIC_ARN || '',
-    useLocalStore:
-      process.env.USE_LOCAL_STORE === 'true' || !process.env.AWS_ACCESS_KEY_ID,
+    useLocalStore: process.env.USE_LOCAL_STORE === 'true',
   };
 }
