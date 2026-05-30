@@ -8,11 +8,9 @@ WORKDIR /app/services/analytics-service
 RUN npm install && npm run build
 
 FROM node:20-alpine
-WORKDIR /app
-COPY --from=builder /app/services/analytics-service/dist ./dist
-COPY --from=builder /app/services/analytics-service/package.json ./
-COPY --from=builder /app/services/analytics-service/node_modules ./node_modules
-COPY --from=builder /app/packages/shared ./packages/shared
+WORKDIR /app/services/analytics-service
+COPY --from=builder /app/packages/shared /app/packages/shared
+COPY --from=builder /app/services/analytics-service ./
 ENV PORT=3005
 EXPOSE 3005
 CMD ["node", "dist/index.js"]

@@ -57,10 +57,21 @@ resource "aws_iam_instance_profile" "ec2_payment" {
   role = aws_iam_role.ec2_payment.name
 }
 
+data "aws_subnets" "ec2" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+  filter {
+    name   = "availability-zone"
+    values = ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"]
+  }
+}
+
 resource "aws_instance" "payment" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = "t3.micro"
-  subnet_id              = data.aws_subnets.default.ids[0]
+  subnet_id              = data.aws_subnets.ec2.ids[0]
   vpc_security_group_ids = [aws_security_group.ec2_payment.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_payment.name
 

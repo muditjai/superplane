@@ -8,11 +8,9 @@ WORKDIR /app/services/storage-service
 RUN npm install && npm run build
 
 FROM node:20-alpine
-WORKDIR /app
-COPY --from=builder /app/services/storage-service/dist ./dist
-COPY --from=builder /app/services/storage-service/package.json ./
-COPY --from=builder /app/services/storage-service/node_modules ./node_modules
-COPY --from=builder /app/packages/shared ./packages/shared
+WORKDIR /app/services/storage-service
+COPY --from=builder /app/packages/shared /app/packages/shared
+COPY --from=builder /app/services/storage-service ./
 ENV PORT=3001
 EXPOSE 3001
 CMD ["node", "dist/index.js"]
