@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Superplane — AWS Health</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 720px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #111;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #666; margin-bottom: 1.5rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid #eee; }
+    th { font-size: 0.75rem; text-transform: uppercase; color: #888; }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .healthy { background: #dcfce7; color: #166534; }
+    .unhealthy { background: #fee2e2; color: #991b1b; }
+    .pending { background: #f3f4f6; color: #6b7280; }
+    code { font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <h1>Superplane AWS</h1>
+  <p class="subtitle">Container health dashboard — hardcoded mock services for migration demo</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Container</th>
+        <th>Status</th>
+        <th>Version</th>
+        <th>Platform</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <script>
+    const services = [
+      { name: 'gateway', path: '/gateway-health.json', static: true },
+      { name: 'storage-service', path: '/services/storage-service/health' },
+      { name: 'search-service', path: '/services/search-service/health' },
+      { name: 'upload-redaction-service', path: '/services/upload-redaction-service/health' },
+      { name: 'payment-service', path: '/services/payment-service/health' },
+      { name: 'analytics-service', path: '/services/analytics-service/health' },
+    ];
+
+    const tbody = document.getElementById('rows');
+
+    function row(name, status, version, platform) {
+      const tr = document.createElement('tr');
+      const cls = status === 'healthy' ? 'healthy' : status === 'pending' ? 'pending' : 'unhealthy';
+      tr.innerHTML = `
+        <td><code>${name}</code></td>
+        <td><span class="badge ${cls}">${status}</span></td>
+        <td><code>${version}</code></td>
+        <td>${platform}</td>
+      `;
+      return tr;
+    }
+
+    services.forEach(({ name, path }) => {
+      tbody.appendChild(row(name, 'pending', '…', '…'));
+    });
+
+    services.forEach(({ name, path, static: isStatic }, i) => {
+      fetch(path)
+        .then(r => r.json())
+        .then(data => {
+          tbody.rows[i].replaceWith(row(name, data.status || 'healthy', data.version || '—', data.platform || 'aws'));
+        })
+        .catch(() => {
+          tbody.rows[i].replaceWith(row(name, 'unreachable', '—', '—'));
+        });
+    });
+  </script>
+</body>
+</html>

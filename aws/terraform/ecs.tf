@@ -33,61 +33,13 @@ resource "aws_iam_role" "ecs_task" {
   })
 }
 
-resource "aws_iam_role_policy" "ecs_task" {
-  name = "${local.name_prefix}-ecs-task-policy"
-  role = aws_iam_role.ecs_task.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["s3:*"]
-        Resource = [aws_s3_bucket.offer_pdfs.arn, "${aws_s3_bucket.offer_pdfs.arn}/*"]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["dynamodb:*"]
-        Resource = [
-          aws_dynamodb_table.offers.arn,
-          aws_dynamodb_table.payments.arn,
-          aws_dynamodb_table.analytics.arn
-        ]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["sqs:SendMessage", "sqs:ReceiveMessage"]
-        Resource = [aws_sqs_queue.upload.arn, aws_sqs_queue.analytics.arn]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["sns:Publish"]
-        Resource = [aws_sns_topic.offer_published.arn, aws_sns_topic.payment_completed.arn]
-      }
-    ]
-  })
-}
-
 locals {
-  common_env = [
-    { name = "AWS_REGION", value = var.aws_region },
-    { name = "S3_BUCKET", value = aws_s3_bucket.offer_pdfs.bucket },
-    { name = "OFFERS_TABLE", value = aws_dynamodb_table.offers.name },
-    { name = "PAYMENTS_TABLE", value = aws_dynamodb_table.payments.name },
-    { name = "ANALYTICS_TABLE", value = aws_dynamodb_table.analytics.name },
-    { name = "UPLOAD_QUEUE_URL", value = aws_sqs_queue.upload.url },
-    { name = "ANALYTICS_QUEUE_URL", value = aws_sqs_queue.analytics.url },
-    { name = "OFFER_PUBLISHED_TOPIC_ARN", value = aws_sns_topic.offer_published.arn },
-    { name = "PAYMENT_COMPLETED_TOPIC_ARN", value = aws_sns_topic.payment_completed.arn },
-    { name = "USE_LOCAL_STORE", value = "false" }
-  ]
-
   backend_containers = {
-    storage-service = { port = 3001, image_key = "storage-service" }
-    search-service  = { port = 3002, image_key = "search-service" }
+    storage-service          = { port = 3001, image_key = "storage-service" }
+    search-service           = { port = 3002, image_key = "search-service" }
     upload-redaction-service = { port = 3003, image_key = "upload-redaction-service" }
-    payment-service = { port = 3004, image_key = "payment-service" }
-    analytics-service = { port = 3005, image_key = "analytics-service" }
+    payment-service          = { port = 3004, image_key = "payment-service" }
+    analytics-service        = { port = 3005, image_key = "analytics-service" }
   }
 }
 
@@ -129,7 +81,7 @@ resource "aws_ecs_task_definition" "app" {
       image     = "${aws_ecr_repository.repos[cfg.image_key].repository_url}:${var.image_tag}"
       essential = true
       portMappings = [{ containerPort = cfg.port, hostPort = cfg.port, protocol = "tcp" }]
-      environment = concat(local.common_env, [{ name = "PORT", value = tostring(cfg.port) }])
+      environment = [{ name = "PORT", value = tostring(cfg.port) }]
       logConfiguration = {
         logDriver = "awslogs"
         options = {

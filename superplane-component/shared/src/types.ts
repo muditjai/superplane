@@ -1,39 +1,17 @@
-export interface EcsContainerSummary {
-  name: string;
-  image: string;
-  lastStatus: string;
-  healthStatus?: string;
-}
-
-export interface EcsTaskSummary {
-  taskArn: string;
-  taskDefinitionArn: string;
-  lastStatus: string;
-  startedAt?: string;
-  containers: EcsContainerSummary[];
-}
-
-/** Output of list-ecs-tasks — input to deploy-to-gcp */
+/** Container to migrate — step 1 output item / step 2 input item */
 export interface MigrationServiceTarget {
   containerName: string;
   image: string;
-  ecrRepository?: string;
   imageTag?: string;
-  /** Suggested Cloud Run service name (kebab-case) */
   cloudRunServiceName: string;
 }
 
+/** Step 1 (list-ecs-tasks) output → step 2 (deploy-to-gcp) input */
 export interface ListEcsTasksOutput {
-  cluster: string;
-  region: string;
-  taskCount: number;
-  tasks: EcsTaskSummary[];
   services: MigrationServiceTarget[];
 }
 
 export interface DeployToGcpInput {
-  /** Full output from list-ecs-tasks, or pass services directly */
-  listResult?: ListEcsTasksOutput;
   services?: MigrationServiceTarget[];
   gcpProjectId?: string;
   gcpRegion?: string;
@@ -41,20 +19,11 @@ export interface DeployToGcpInput {
   skipContainers?: string[];
 }
 
-export interface GcpDeploymentResult {
-  containerName: string;
-  cloudRunService: string;
-  image: string;
-  status: 'deployed' | 'failed' | 'skipped';
-  message?: string;
-  url?: string;
-  revision?: string;
-}
-
+/** Step 2 (deploy-to-gcp) output → step 3 (get-cloudrun-status) input */
 export interface DeployToGcpOutput {
   gcpProjectId: string;
   gcpRegion: string;
-  deployments: GcpDeploymentResult[];
+  serviceNames: string[];
 }
 
 export interface CloudRunServiceStatus {
@@ -65,13 +34,14 @@ export interface CloudRunServiceStatus {
   traffic?: Array<{ revision: string; percent: number }>;
 }
 
+/** Step 3 (get-cloudrun-status) input (also accepts deploy output directly) */
 export interface GetCloudRunStatusInput {
   gcpProjectId?: string;
   gcpRegion?: string;
-  /** If omitted, lists all services in the region */
   serviceNames?: string[];
 }
 
+/** Step 3 (get-cloudrun-status) output */
 export interface GetCloudRunStatusOutput {
   gcpProjectId: string;
   gcpRegion: string;

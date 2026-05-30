@@ -4,7 +4,6 @@ services:
       context: .
       dockerfile: services/storage-service/Dockerfile
     environment:
-      USE_LOCAL_STORE: "true"
       PORT: 3001
     ports:
       - "3001:3001"
@@ -14,7 +13,6 @@ services:
       context: .
       dockerfile: services/search-service/Dockerfile
     environment:
-      USE_LOCAL_STORE: "true"
       PORT: 3002
     ports:
       - "3002:3002"
@@ -24,7 +22,6 @@ services:
       context: .
       dockerfile: services/upload-redaction-service/Dockerfile
     environment:
-      USE_LOCAL_STORE: "true"
       PORT: 3003
     ports:
       - "3003:3003"
@@ -34,7 +31,6 @@ services:
       context: .
       dockerfile: services/payment-service/Dockerfile
     environment:
-      USE_LOCAL_STORE: "true"
       PORT: 3004
     ports:
       - "3004:3004"
@@ -44,31 +40,19 @@ services:
       context: .
       dockerfile: services/analytics-service/Dockerfile
     environment:
-      USE_LOCAL_STORE: "true"
       PORT: 3005
     ports:
       - "3005:3005"
 
   gateway:
-    image: nginx:alpine
-    volumes:
-      - ./nginx/gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile.local
     ports:
-      - "8080:8080"
+      - "8080:80"
     depends_on:
       - storage-service
       - search-service
       - upload-redaction-service
       - payment-service
       - analytics-service
-
-  frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-      args:
-        VITE_API_BASE_URL: "http://localhost:8080"
-    ports:
-      - "3006:80"
-    depends_on:
-      - gateway

@@ -1,0 +1,6 @@
+{
+  "status": "healthy",
+  "service": "gateway",
+  "version": "1.0.0",
+  "platform": "aws"
+}

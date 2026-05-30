@@ -5,6 +5,7 @@
 *.key
 credentials.json
 AWS_creds.txt
+GCP_creds.txt
 secrets/
 
 # Node / build
@@ -19,6 +20,7 @@ dist/
 *.tfstate.*
 .terraform.lock.hcl
 aws/terraform/build/
+superplane-component/terraform/plan.tfplan
 
 # OS / editor
 .DS_Store

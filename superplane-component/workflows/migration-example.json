@@ -6,7 +6,7 @@
       "id": "list_ecs",
       "component": "aws.lambda.runFunction",
       "config": {
-        "functionName": "superplane-list-ecs-tasks",
+        "functionName": "superplan-migration-list-ecs-tasks",
         "payload": {
           "cluster": "superplane-cluster",
           "service": "superplane-app"
@@ -17,21 +17,16 @@
       "id": "deploy_gcp",
       "component": "aws.lambda.runFunction",
       "config": {
-        "functionName": "superplane-deploy-to-gcp",
-        "payload": {
-          "listResult": "{{ steps.list_ecs.output }}",
-          "skipContainers": ["gateway"]
-        }
+        "functionName": "superplan-migration-deploy-to-gcp",
+        "payload": "{{ steps.list_ecs.output.data.payload }}"
       }
     },
     {
       "id": "cloudrun_status",
       "component": "aws.lambda.runFunction",
       "config": {
-        "functionName": "superplane-get-cloudrun-status",
-        "payload": {
-          "serviceNames": ["storage-service", "search-service", "upload-redaction-service", "payment-service", "analytics-service"]
-        }
+        "functionName": "superplan-migration-get-cloudrun-status",
+        "payload": "{{ steps.deploy_gcp.output.data.payload }}"
       }
     }
   ]

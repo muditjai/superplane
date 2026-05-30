@@ -3,15 +3,17 @@ import {
   DescribeTasksCommand,
   ECSClient,
   ListTasksCommand,
-  type Container,
   type Task,
 } from '@aws-sdk/client-ecs';
 import type {
-  EcsContainerSummary,
-  EcsTaskSummary,
   ListEcsTasksOutput,
   MigrationServiceTarget,
 } from '@superplane/component-shared';
+import { parseSuperPlanePayload } from '@superplane/component-shared';
+
+function logIO(phase: 'input' | 'output', data: unknown): void {
+  console.log(`[list-ecs-tasks] ${phase}:`, JSON.stringify(data));
+}
 
 export interface ListEcsTasksInput {
   cluster?: string;
@@ -20,67 +22,61 @@ export interface ListEcsTasksInput {
 }
 
 function parseInput(event: unknown): ListEcsTasksInput {
-  const raw =
-    typeof event === 'string'
-      ? JSON.parse(event)
-      : (event as Record<string, unknown>)?.payload ?? event;
-  return (raw ?? {}) as ListEcsTasksInput;
+  return parseSuperPlanePayload<ListEcsTasksInput>(event);
 }
 
-function summarizeContainer(c: Container): EcsContainerSummary {
-  return {
-    name: c.name ?? 'unknown',
-    image: c.image ?? '',
-    lastStatus: c.lastStatus ?? 'UNKNOWN',
-    healthStatus: c.healthStatus,
-  };
-}
-
-function summarizeTask(task: Task): EcsTaskSummary {
-  return {
-    taskArn: task.taskArn ?? '',
-    taskDefinitionArn: task.taskDefinitionArn ?? '',
-    lastStatus: task.lastStatus ?? 'UNKNOWN',
-    startedAt: task.startedAt?.toISOString(),
-    containers: (task.containers ?? []).map(summarizeContainer),
-  };
-}
-
-function parseImage(image: string): { ecrRepository?: string; imageTag?: string } {
+function parseImage(image: string): { imageTag?: string } {
   const match = image.match(/\/([^/:]+)(?::(.+))?$/);
   if (!match) return {};
-  return { ecrRepository: match[1], imageTag: match[2] || 'latest' };
+  return { imageTag: match[2] || 'latest' };
 }
 
 function toCloudRunName(containerName: string): string {
   return containerName.replace(/_/g, '-').toLowerCase();
 }
 
-function extractServices(tasks: EcsTaskSummary[]): MigrationServiceTarget[] {
+function extractServices(tasks: Task[]): MigrationServiceTarget[] {
   const seen = new Set<string>();
   const services: MigrationServiceTarget[] = [];
   for (const task of tasks) {
-    for (const c of task.containers) {
-      if (seen.has(c.name)) continue;
-      seen.add(c.name);
-      const { ecrRepository, imageTag } = parseImage(c.image);
+    for (const c of task.containers ?? []) {
+      const name = c.name ?? 'unknown';
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const { imageTag } = parseImage(c.image ?? '');
       services.push({
-        containerName: c.name,
-        image: c.image,
-        ecrRepository,
+        containerName: name,
+        image: c.image ?? '',
         imageTag,
-        cloudRunServiceName: toCloudRunName(c.name),
+        cloudRunServiceName: toCloudRunName(name),
       });
     }
   }
   return services;
 }
 
+/**
+ * Sample input:
+ * { "cluster": "superplane-cluster", "service": "superplane-app" }
+ *
+ * Sample output (pass entire SuperPlane step output to deploy-to-gcp):
+ * {
+ *   "services": [
+ *     {
+ *       "containerName": "storage-service",
+ *       "image": "590184027793.dkr.ecr.us-east-1.amazonaws.com/superplane-storage-service:latest",
+ *       "imageTag": "latest",
+ *       "cloudRunServiceName": "storage-service"
+ *     }
+ *   ]
+ * }
+ */
 export async function handler(
   event: unknown,
   _context: Context
 ): Promise<ListEcsTasksOutput> {
   const input = parseInput(event);
+  logIO('input', { raw: event, parsed: input });
   const region = input.region || process.env.AWS_REGION || 'us-east-1';
   const cluster = input.cluster || process.env.ECS_CLUSTER || 'superplane-cluster';
 
@@ -96,27 +92,18 @@ export async function handler(
 
   const taskArns = listResp.taskArns ?? [];
   if (taskArns.length === 0) {
-    return {
-      cluster,
-      region,
-      taskCount: 0,
-      tasks: [],
-      services: [],
-    };
+    const output = { services: [] };
+    logIO('output', output);
+    return output;
   }
 
   const describeResp = await ecs.send(
     new DescribeTasksCommand({ cluster, tasks: taskArns })
   );
 
-  const tasks = (describeResp.tasks ?? []).map(summarizeTask);
-  const services = extractServices(tasks);
-
-  return {
-    cluster,
-    region,
-    taskCount: tasks.length,
-    tasks,
-    services,
+  const output = {
+    services: extractServices(describeResp.tasks ?? []),
   };
+  logIO('output', output);
+  return output;
 }

@@ -1,20 +1,32 @@
-# Superplane AWS — Offer Letters Platform
+# Superplane AWS — Migration Demo (Mock Services)
 
-A TypeScript monorepo demo for sharing anonymized offer letters, modeled after [offerletters.fyi](https://www.offerletters.fyi/). Built for future AWS→GCP migration demos with Superplane.
+Minimal mock containers for the AWS→GCP Superplane migration demo. No DynamoDB, S3, SQS, Lambda, or React frontend — just health/version endpoints with hardcoded responses.
 
 ## Architecture
 
-Single **ECS Fargate task** (no ALB) with 6 containers sharing one public IP:
+Single **ECS Fargate task** with 6 containers sharing one public IP:
 
-- **gateway** — nginx serves React frontend + proxies `/api/*` to localhost backends
-- **storage-service**, **search-service**, **upload-redaction-service**, **payment-service**, **analytics-service** — Express microservices on ports 3001–3005
+| Container | Port | Endpoints |
+|-----------|------|-----------|
+| **gateway** | 80 | Static health dashboard at `/`, `gateway-health.json` |
+| **storage-service** | 3001 | `GET /health`, `GET /version` |
+| **search-service** | 3002 | `GET /health`, `GET /version` |
+| **upload-redaction-service** | 3003 | `GET /health`, `GET /version` |
+| **payment-service** | 3004 | `GET /health`, `GET /version` |
+| **analytics-service** | 3005 | `GET /health`, `GET /version` |
 
-Supporting AWS: S3, DynamoDB, SQS, SNS, Lambda, ECR, CodePipeline, CodeArtifact
+Each backend returns JSON like:
+
+```json
+{ "status": "healthy", "service": "storage-service", "version": "1.0.0", "platform": "aws" }
+```
+
+Terraform provisions only **ECS + ECR + CloudWatch logs** (no data stores).
 
 ```
-Browser → ECS task public IP:80 (nginx gateway)
-              → localhost:3001-3005 (microservices)
-              → S3 / DynamoDB / SQS / SNS → Lambda
+Browser → ECS task public IP:80 (nginx gateway + dashboard)
+              → localhost:3001-3005 (mock Express services)
+Superplane pipeline → list ECS containers → deploy to Cloud Run → check GCP health
 ```
 
 ## Local development
@@ -23,103 +35,58 @@ Browser → ECS task public IP:80 (nginx gateway)
 cd aws
 chmod +x scripts/*.sh
 ./scripts/deploy-local.sh
-
-# Run everything with Docker
 docker compose up --build
 ```
 
-- Frontend: http://localhost:3006
-- API gateway: http://localhost:8080
-- Uses in-memory stores (`USE_LOCAL_STORE=true`) — no AWS credentials needed
+Open http://localhost:8080/ for the health dashboard.
 
-### Native dev (hot reload)
+Direct service checks:
 
 ```bash
-npm install
-npm run build -w @superplane/shared
-npm run dev -w @superplane/storage-service   # port 3001
-npm run dev -w @superplane/search-service    # port 3002
-# ... etc
-npm run dev -w @superplane/frontend          # port 5173 (proxies /api → :8080)
-docker compose up gateway
+curl http://localhost:3001/health
+curl http://localhost:3001/version
 ```
 
 ## AWS deployment
 
-Prerequisites: AWS CLI, Terraform, Docker, credentials with permissions for ECS/EC2/S3/DynamoDB/etc.
+Prerequisites: AWS CLI, Terraform, Docker, credentials for ECS/ECR.
 
 ```bash
 cd aws
 ./scripts/deploy-aws.sh
 ```
 
-This will:
-1. Build all TypeScript packages and Lambda handlers
-2. `terraform apply` in `terraform/`
-3. Push Docker images to ECR
-4. Force ECS rolling redeploy
+This builds mock services, runs `terraform apply`, pushes images to **ECR and GCP Artifact Registry** (for Cloud Run migration), and redeploys ECS.
 
-### Terraform only
+GCP images land at `us-central1-docker.pkg.dev/migracle-gcp-4-1/superplane-migration/<service>:latest` — matching what the Superplane `deploy-to-gcp` lambda expects.
 
-```bash
-cd aws/terraform
-terraform init
-terraform apply -var="image_tag=latest"
-```
-
-Outputs include ECR URLs, DynamoDB table names. Get the public IP:
+Get the public IP:
 
 ```bash
 ./scripts/get-task-ip.sh superplane-cluster superplane-app
 # open http://<ip>/
 ```
 
-### Route 53 (optional)
-
-```bash
-terraform apply -var="enable_route53=true" -var="domain_name=offerletters.example.com"
-```
-
-### CodePipeline
-
-The pipeline in `terraform/pipeline.tf` expects a GitHub OAuth token. Replace `REPLACE_WITH_GITHUB_TOKEN` in the Terraform config or use AWS Console to connect the repo after first apply.
-
-## API endpoints (via ALB)
-
-| Method | Path | Service |
-|--------|------|---------|
-| GET | `/api/search?q=` | search |
-| GET | `/api/offers/:id` | storage |
-| POST | `/api/upload` | upload-redaction (multipart PDF) |
-| POST | `/api/payments` | payment (EC2) |
-| POST | `/api/analytics/events` | analytics |
-
 ## Smoke tests
 
 ```bash
 IP=$(./scripts/get-task-ip.sh superplane-cluster superplane-app)
-curl http://$IP/
-curl http://$IP/api/search
+curl http://$IP/gateway-health.json
+curl http://$IP/services/storage-service/health
+curl http://$IP/services/storage-service/version
 ```
 
 ## Project structure
 
 ```
 aws/
-├── frontend/              # React + Vite + Tailwind
-├── services/              # Express microservices (TypeScript)
-├── packages/shared/       # Shared types + AWS clients
-├── lambda/                # S3 trigger + SNS→analytics
-├── terraform/             # AWS infrastructure
-├── nginx/                 # Local gateway config
+├── services/              # Mock Express health/version stubs
+├── terraform/             # ECS + ECR only
+├── nginx/                 # Gateway dashboard + proxy config
 ├── docker-compose.yml
 └── scripts/
     ├── deploy-local.sh
     └── deploy-aws.sh
 ```
 
-## Security
-
-- Never commit AWS credentials (see root `.gitignore`)
-- S3 bucket blocks public access; PDFs served via presigned URLs
-- Payments are mock only in v1
+Legacy folders (`frontend/`, `lambda/`, `packages/shared/`) are unused by the simplified demo.

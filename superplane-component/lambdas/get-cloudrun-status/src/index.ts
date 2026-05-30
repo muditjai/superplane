@@ -2,19 +2,15 @@ import type { Context } from 'aws-lambda';
 import { GoogleAuth } from 'google-auth-library';
 import type {
   CloudRunServiceStatus,
-  GetCloudRunStatusInput,
   GetCloudRunStatusOutput,
 } from '@superplane/component-shared';
+import { parseStatusInput } from '@superplane/component-shared';
+
+function logIO(phase: 'input' | 'output', data: unknown): void {
+  console.log(`[get-cloudrun-status] ${phase}:`, JSON.stringify(data));
+}
 
 const RUN_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
-
-function parseInput(event: unknown): GetCloudRunStatusInput {
-  const raw =
-    typeof event === 'string'
-      ? JSON.parse(event)
-      : (event as Record<string, unknown>)?.payload ?? event;
-  return (raw ?? {}) as GetCloudRunStatusInput;
-}
 
 async function gcpFetch(
   path: string,
@@ -58,11 +54,27 @@ function mapService(raw: Record<string, unknown>): CloudRunServiceStatus {
   };
 }
 
+/**
+ * Sample input — entire payload is Go fmt string from SuperPlane:
+ * map[gcpProjectId:migracle-gcp-4-1 gcpRegion:us-central1 serviceNames:[storage-service search-service]]
+ *
+ * SuperPlane payload expression:
+ * {{ steps.deploy_gcp.output.data.payload }}
+ *
+ * Sample output:
+ * {
+ *   "gcpProjectId": "migracle-gcp-4-1",
+ *   "gcpRegion": "us-central1",
+ *   "services": [{ "name": "storage-service", "uri": "https://...", "conditions": [...] }]
+ * }
+ */
 export async function handler(
   event: unknown,
   _context: Context
 ): Promise<GetCloudRunStatusOutput> {
-  const input = parseInput(event);
+  const input = parseStatusInput(event);
+  logIO('input', { raw: event, parsed: input });
+
   const gcpProjectId =
     input.gcpProjectId || process.env.GCP_PROJECT_ID || '';
   const gcpRegion =
@@ -109,5 +121,7 @@ export async function handler(
     }
   }
 
-  return { gcpProjectId, gcpRegion, services };
+  const output = { gcpProjectId, gcpRegion, services };
+  logIO('output', output);
+  return output;
 }

@@ -1,5 +1,5 @@
 resource "aws_iam_role" "lambda" {
-  name = "${local.name_prefix}-migration-lambda"
+  name = "${local.name_prefix}-lambda"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -17,7 +17,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 }
 
 resource "aws_iam_role_policy" "lambda_ecs" {
-  name = "${local.name_prefix}-lambda-ecs-read"
+  name = "${local.name_prefix}-ecs-read"
   role = aws_iam_role.lambda.id
 
   policy = jsonencode({

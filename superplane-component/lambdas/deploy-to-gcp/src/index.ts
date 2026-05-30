@@ -1,29 +1,16 @@
 import type { Context } from 'aws-lambda';
 import { GoogleAuth } from 'google-auth-library';
 import type {
-  DeployToGcpInput,
   DeployToGcpOutput,
-  GcpDeploymentResult,
-  ListEcsTasksOutput,
   MigrationServiceTarget,
 } from '@superplane/component-shared';
+import { parseDeployInput } from '@superplane/component-shared';
+
+function logIO(phase: 'input' | 'output', data: unknown): void {
+  console.log(`[deploy-to-gcp] ${phase}:`, JSON.stringify(data));
+}
 
 const RUN_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
-
-function parseInput(event: unknown): DeployToGcpInput {
-  const raw =
-    typeof event === 'string'
-      ? JSON.parse(event)
-      : (event as Record<string, unknown>)?.payload ?? event;
-  return (raw ?? {}) as DeployToGcpInput;
-}
-
-function resolveServices(input: DeployToGcpInput): MigrationServiceTarget[] {
-  if (input.services?.length) return input.services;
-  const list = input.listResult as ListEcsTasksOutput | undefined;
-  if (list?.services?.length) return list.services;
-  throw new Error('Provide listResult (from list-ecs-tasks) or services array');
-}
 
 function resolveGcpImage(
   svc: MigrationServiceTarget,
@@ -33,8 +20,7 @@ function resolveGcpImage(
     return svc.image;
   }
   const tag = svc.imageTag || 'latest';
-  const name = svc.cloudRunServiceName;
-  return `${prefix}/${name}:${tag}`;
+  return `${prefix}/${svc.cloudRunServiceName}:${tag}`;
 }
 
 async function gcpFetch(
@@ -65,7 +51,7 @@ async function deployService(
   region: string,
   svc: MigrationServiceTarget,
   image: string
-): Promise<GcpDeploymentResult> {
+): Promise<string> {
   const serviceName = svc.cloudRunServiceName;
   const parent = `/locations/${region}`;
   const getResp = await gcpFetch(
@@ -88,38 +74,15 @@ async function deployService(
       projectId
     );
     if (!createResp.ok) {
-      const err = await createResp.text();
-      return {
-        containerName: svc.containerName,
-        cloudRunService: serviceName,
-        image,
-        status: 'failed',
-        message: `Create failed: ${err}`,
-      };
+      throw new Error(
+        `Create ${serviceName} failed: ${await createResp.text()}`
+      );
     }
-    const created = (await createResp.json()) as {
-      uri?: string;
-      latestReadyRevision?: string;
-    };
-    return {
-      containerName: svc.containerName,
-      cloudRunService: serviceName,
-      image,
-      status: 'deployed',
-      url: created.uri,
-      revision: created.latestReadyRevision,
-      message: 'Created new Cloud Run service',
-    };
+    return serviceName;
   }
 
   if (!getResp.ok) {
-    return {
-      containerName: svc.containerName,
-      cloudRunService: serviceName,
-      image,
-      status: 'failed',
-      message: `Get service failed: ${getResp.status}`,
-    };
+    throw new Error(`Get ${serviceName} failed: ${getResp.status}`);
   }
 
   const existing = (await getResp.json()) as {
@@ -140,36 +103,32 @@ async function deployService(
   );
 
   if (!patchResp.ok) {
-    const err = await patchResp.text();
-    return {
-      containerName: svc.containerName,
-      cloudRunService: serviceName,
-      image,
-      status: 'failed',
-      message: `Update failed: ${err}`,
-    };
+    throw new Error(`Update ${serviceName} failed: ${await patchResp.text()}`);
   }
 
-  const updated = (await patchResp.json()) as {
-    uri?: string;
-    latestReadyRevision?: string;
-  };
-  return {
-    containerName: svc.containerName,
-    cloudRunService: serviceName,
-    image,
-    status: 'deployed',
-    url: updated.uri,
-    revision: updated.latestReadyRevision,
-    message: 'Updated Cloud Run service',
-  };
+  return serviceName;
 }
 
+/**
+ * Sample input — entire payload is Go fmt string from SuperPlane:
+ * map[services:[map[cloudRunServiceName:storage-service containerName:storage-service image:590184027793.dkr.ecr.us-east-1.amazonaws.com/superplane-storage-service:latest imageTag:latest] ...]]
+ *
+ * SuperPlane payload expression:
+ * {{ steps.list_ecs.output.data.payload }}
+ *
+ * Sample output (pass to get-cloudrun-status):
+ * {
+ *   "gcpProjectId": "migracle-gcp-4-1",
+ *   "gcpRegion": "us-central1",
+ *   "serviceNames": ["storage-service", "search-service"]
+ * }
+ */
 export async function handler(
   event: unknown,
   _context: Context
 ): Promise<DeployToGcpOutput> {
-  const input = parseInput(event);
+  const input = parseDeployInput(event);
+  logIO('input', { raw: event, parsed: input });
   const gcpProjectId =
     input.gcpProjectId || process.env.GCP_PROJECT_ID || '';
   const gcpRegion =
@@ -182,18 +141,21 @@ export async function handler(
     throw new Error('gcpProjectId required (payload or GCP_PROJECT_ID env)');
   }
 
-  const skip = new Set(
-    input.skipContainers ?? ['gateway']
-  );
-  const services = resolveServices(input).filter(
-    (s) => !skip.has(s.containerName)
-  );
-
-  const deployments: GcpDeploymentResult[] = [];
-  for (const svc of services) {
-    const image = resolveGcpImage(svc, imagePrefix);
-    deployments.push(await deployService(gcpProjectId, gcpRegion, svc, image));
+  const services = input.services ?? [];
+  if (!services.length) {
+    throw new Error('Provide services array from list-ecs-tasks step');
   }
 
-  return { gcpProjectId, gcpRegion, deployments };
+  const skip = new Set(input.skipContainers ?? ['gateway']);
+  const serviceNames: string[] = [];
+
+  for (const svc of services) {
+    if (skip.has(svc.containerName)) continue;
+    const image = resolveGcpImage(svc, imagePrefix);
+    serviceNames.push(await deployService(gcpProjectId, gcpRegion, svc, image));
+  }
+
+  const output = { gcpProjectId, gcpRegion, serviceNames };
+  logIO('output', output);
+  return output;
 }

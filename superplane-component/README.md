@@ -12,43 +12,28 @@ Invoke each function with the SuperPlane **[Lambda • Run Function](https://doc
 | `deploy-to-gcp` | Takes that list and updates/creates Cloud Run services |
 | `get-cloudrun-status` | Returns Cloud Run service URLs, revisions, and ready state |
 
-## Workflow chain (SuperPlane canvas)
+## Workflow chain
+
+Each step outputs only what the next step needs. Wire the **full previous step output** as the next node's payload.
 
 ```
-[Manual trigger]
-    → Lambda: superplane-list-ecs-tasks
-    → Lambda: superplane-deploy-to-gcp   (payload = previous step output)
-    → Lambda: superplane-get-cloudrun-status
+list-ecs-tasks  →  { services: [...] }
+deploy-to-gcp   →  { gcpProjectId, gcpRegion, serviceNames: [...] }
+get-cloudrun-status  →  { gcpProjectId, gcpRegion, services: [...] }
 ```
 
 ### Step 1 — List ECS tasks
 
-**Function:** `superplane-list-ecs-tasks`
+**Input:** `{ "cluster": "superplane-cluster", "service": "superplane-app" }`
 
-**Payload:**
-
+**Output:**
 ```json
 {
-  "cluster": "superplane-cluster",
-  "region": "us-east-1",
-  "service": "superplane-app"
-}
-```
-
-All fields optional (defaults from env).
-
-**Output** (passed to next step):
-
-```json
-{
-  "cluster": "superplane-cluster",
-  "region": "us-east-1",
-  "taskCount": 1,
-  "tasks": [{ "taskArn": "...", "containers": [{ "name": "gateway", "image": "..." }] }],
   "services": [
     {
       "containerName": "storage-service",
       "image": "590184027793.dkr.ecr.us-east-1.amazonaws.com/superplane-storage-service:latest",
+      "imageTag": "latest",
       "cloudRunServiceName": "storage-service"
     }
   ]
@@ -57,38 +42,31 @@ All fields optional (defaults from env).
 
 ### Step 2 — Deploy to GCP
 
-**Function:** `superplane-deploy-to-gcp`
+**SuperPlane payload** (expression only — resolves to Go fmt string):
 
-**Payload** (use expression from step 1, e.g. `$steps.list_ecs.output`):
-
-```json
-{
-  "listResult": { "...": "output from list-ecs-tasks" },
-  "gcpProjectId": "your-gcp-project",
-  "gcpRegion": "us-central1",
-  "skipContainers": ["gateway"]
-}
+```
+{{ steps.list_ecs.output.data.payload }}
 ```
 
-Images default to `{GCP_REGION}-docker.pkg.dev/{GCP_PROJECT}/superplane-migration/{service}:latest`. Override with `GCP_IMAGE_PREFIX` env on the Lambda.
+The Lambda receives the entire payload as a string like:
 
-Requires `GOOGLE_SERVICE_ACCOUNT_JSON` on the Lambda (service account with Cloud Run Admin).
+```
+map[services:[map[cloudRunServiceName:storage-service containerName:storage-service image:... imageTag:latest] ...]]
+```
 
 ### Step 3 — Cloud Run status
 
-**Function:** `superplane-get-cloudrun-status`
+**SuperPlane payload:**
 
-**Payload:**
-
-```json
-{
-  "gcpProjectId": "your-gcp-project",
-  "gcpRegion": "us-central1",
-  "serviceNames": ["storage-service", "search-service"]
-}
+```
+{{ steps.deploy_gcp.output.data.payload }}
 ```
 
-Omit `serviceNames` to list all services in the region.
+Resolves to:
+
+```
+map[gcpProjectId:migracle-gcp-4-1 gcpRegion:us-central1 serviceNames:[storage-service search-service]]
+```
 
 ## Build & deploy to AWS
 
@@ -134,6 +112,6 @@ superplane-component/
 
 1. Add an **AWS integration** in SuperPlane ([docs](https://docs.superplane.com/components/aws/)).
 2. Add three **Lambda • Run Function** nodes with the function names from `terraform output`.
-3. Wire outputs: list → deploy (`listResult` field) → status (`serviceNames` from deploy results).
+3. Wire outputs: list → deploy → status (each step passes its full SuperPlane output to the next).
 
 GCP credentials: store the service account JSON in Lambda env via Terraform, or use SuperPlane **Secrets** and pass at runtime (extend lambdas as needed).

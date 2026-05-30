@@ -17,7 +17,7 @@ provider "aws" {
 }
 
 locals {
-  name_prefix = "superplane"
+  name_prefix = "superplan-migration"
   lambdas = {
     list-ecs-tasks = {
       description = "List running ECS tasks and containers"
