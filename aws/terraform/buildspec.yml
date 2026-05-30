@@ -1,0 +1,28 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - cd aws
+      - npm install -w @superplane/shared
+      - npm run build -w @superplane/shared
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - cd lambda/s3-upload-trigger && npm install && npm run build && cd ../..
+      - cd lambda/sns-to-analytics && npm install && npm run build && cd ../..
+  build:
+    commands:
+      - |
+        for svc in frontend storage-service search-service upload-redaction-service payment-service analytics-service; do
+          docker build -f services/$svc/Dockerfile -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/superplane-$svc:$IMAGE_TAG . 2>/dev/null || \
+          docker build -f frontend/Dockerfile -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/superplane-$svc:$IMAGE_TAG --build-arg VITE_API_BASE_URL= .
+        done
+      - |
+        for repo in frontend storage-service search-service upload-redaction-service payment-service analytics-service; do
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/superplane-$repo:$IMAGE_TAG
+        done
+  post_build:
+    commands:
+      - |
+        for svc in frontend storage search upload analytics; do
+          aws ecs update-service --cluster $ECS_CLUSTER --service superplane-$svc --force-new-deployment --region $AWS_REGION || true
+        done

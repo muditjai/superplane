@@ -1,0 +1,14 @@
+{
+  "name": "superplane-aws",
+  "private": true,
+  "workspaces": [
+    "packages/shared",
+    "services/*",
+    "lambda/*",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build -w @superplane/shared && npm run build --workspaces --if-present",
+    "build:services": "npm run build -w @superplane/storage-service -w @superplane/search-service -w @superplane/upload-redaction-service -w @superplane/payment-service -w @superplane/analytics-service"
+  }
+}

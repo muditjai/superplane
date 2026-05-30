@@ -7,6 +7,17 @@ credentials.json
 AWS_creds.txt
 secrets/
 
+# Node / build
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
 # OS / editor
 .DS_Store
 .idea/

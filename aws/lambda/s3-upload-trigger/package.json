@@ -1,0 +1,17 @@
+{
+  "name": "@superplane/lambda-s3-upload-trigger",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "package": "npm run build && cd dist && zip -r ../function.zip ."
+  },
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.758.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.147",
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2"
+  }
+}
