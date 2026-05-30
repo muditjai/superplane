@@ -1,0 +1,14 @@
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+AWS_creds.txt
+secrets/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
