@@ -11,18 +11,15 @@ phases:
       - cd lambda/sns-to-analytics && npm install && npm run build && cd ../..
   build:
     commands:
+      - docker build -f nginx/Dockerfile.app -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/superplane-app:$IMAGE_TAG --build-arg VITE_API_BASE_URL= .
       - |
-        for svc in frontend storage-service search-service upload-redaction-service payment-service analytics-service; do
-          docker build -f services/$svc/Dockerfile -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/superplane-$svc:$IMAGE_TAG . 2>/dev/null || \
-          docker build -f frontend/Dockerfile -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/superplane-$svc:$IMAGE_TAG --build-arg VITE_API_BASE_URL= .
+        for svc in storage-service search-service upload-redaction-service payment-service analytics-service; do
+          docker build -f services/$svc/Dockerfile -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/superplane-$svc:$IMAGE_TAG .
         done
       - |
-        for repo in frontend storage-service search-service upload-redaction-service payment-service analytics-service; do
+        for repo in app storage-service search-service upload-redaction-service payment-service analytics-service; do
           docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/superplane-$repo:$IMAGE_TAG
         done
   post_build:
     commands:
-      - |
-        for svc in frontend storage search upload analytics; do
-          aws ecs update-service --cluster $ECS_CLUSTER --service superplane-$svc --force-new-deployment --region $AWS_REGION || true
-        done
+      - aws ecs update-service --cluster $ECS_CLUSTER --service superplane-app --force-new-deployment --region $AWS_REGION

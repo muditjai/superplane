@@ -4,17 +4,16 @@ A TypeScript monorepo demo for sharing anonymized offer letters, modeled after [
 
 ## Architecture
 
-- **Frontend** (React + Vite + Tailwind) on ECS Fargate
-- **Microservices** (Express + TypeScript):
-  - `storage-service` — S3 presigned URLs + offer metadata (ECS)
-  - `search-service` — DynamoDB offer search (ECS)
-  - `upload-redaction-service` — PDF upload + placeholder redaction (ECS)
-  - `payment-service` — mock payments (EC2 + Docker)
-  - `analytics-service` — click/purchase events (ECS)
-- **AWS**: S3, DynamoDB, SQS, SNS, Lambda, ECS, EC2, ALB, ECR, CodePipeline, CodeArtifact, Route 53 (stub)
+Single **ECS Fargate task** (no ALB) with 6 containers sharing one public IP:
+
+- **gateway** — nginx serves React frontend + proxies `/api/*` to localhost backends
+- **storage-service**, **search-service**, **upload-redaction-service**, **payment-service**, **analytics-service** — Express microservices on ports 3001–3005
+
+Supporting AWS: S3, DynamoDB, SQS, SNS, Lambda, ECR, CodePipeline, CodeArtifact
 
 ```
-Browser → ALB → ECS services / EC2 payment
+Browser → ECS task public IP:80 (nginx gateway)
+              → localhost:3001-3005 (microservices)
               → S3 / DynamoDB / SQS / SNS → Lambda
 ```
 
@@ -29,7 +28,7 @@ chmod +x scripts/*.sh
 docker compose up --build
 ```
 
-- Frontend: http://localhost:3000
+- Frontend: http://localhost:3006
 - API gateway: http://localhost:8080
 - Uses in-memory stores (`USE_LOCAL_STORE=true`) — no AWS credentials needed
 
@@ -68,7 +67,12 @@ terraform init
 terraform apply -var="image_tag=latest"
 ```
 
-Outputs include `website_url` (ALB DNS), ECR URLs, DynamoDB table names.
+Outputs include ECR URLs, DynamoDB table names. Get the public IP:
+
+```bash
+./scripts/get-task-ip.sh superplane-cluster superplane-app
+# open http://<ip>/
+```
 
 ### Route 53 (optional)
 
@@ -93,13 +97,9 @@ The pipeline in `terraform/pipeline.tf` expects a GitHub OAuth token. Replace `R
 ## Smoke tests
 
 ```bash
-# Local
-curl http://localhost:8080/api/search
-curl http://localhost:3001/health
-
-# AWS (replace with ALB DNS from terraform output)
-curl http://<alb-dns>/api/search
-curl http://<alb-dns>/api/analytics/events
+IP=$(./scripts/get-task-ip.sh superplane-cluster superplane-app)
+curl http://$IP/
+curl http://$IP/api/search
 ```
 
 ## Project structure

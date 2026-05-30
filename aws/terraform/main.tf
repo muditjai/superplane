@@ -29,15 +29,8 @@ data "aws_subnets" "default" {
 
 locals {
   name_prefix = "superplane"
-  services = {
-    frontend = { port = 80, paths = ["/", "/about", "/search", "/offers/*"] }
-    storage  = { port = 3001, paths = ["/api/offers", "/api/offers/*"] }
-    search   = { port = 3002, paths = ["/api/search", "/api/search/*"] }
-    upload   = { port = 3003, paths = ["/api/upload", "/api/upload/*"] }
-    analytics = { port = 3005, paths = ["/api/analytics", "/api/analytics/*"] }
-  }
   ecr_repos = [
-    "frontend",
+    "app",
     "storage-service",
     "search-service",
     "upload-redaction-service",
