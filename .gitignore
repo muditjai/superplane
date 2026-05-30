@@ -11,12 +11,14 @@ secrets/
 node_modules/
 dist/
 *.tsbuildinfo
+**/function.zip
 
 # Terraform
 **/.terraform/
 *.tfstate
 *.tfstate.*
 .terraform.lock.hcl
+aws/terraform/build/
 
 # OS / editor
 .DS_Store

@@ -1,0 +1,38 @@
+{
+  "name": "superplane-migration-workflow",
+  "description": "Example SuperPlane workflow: list ECS → deploy GCP → check Cloud Run",
+  "steps": [
+    {
+      "id": "list_ecs",
+      "component": "aws.lambda.runFunction",
+      "config": {
+        "functionName": "superplane-list-ecs-tasks",
+        "payload": {
+          "cluster": "superplane-cluster",
+          "service": "superplane-app"
+        }
+      }
+    },
+    {
+      "id": "deploy_gcp",
+      "component": "aws.lambda.runFunction",
+      "config": {
+        "functionName": "superplane-deploy-to-gcp",
+        "payload": {
+          "listResult": "{{ steps.list_ecs.output }}",
+          "skipContainers": ["gateway"]
+        }
+      }
+    },
+    {
+      "id": "cloudrun_status",
+      "component": "aws.lambda.runFunction",
+      "config": {
+        "functionName": "superplane-get-cloudrun-status",
+        "payload": {
+          "serviceNames": ["storage-service", "search-service", "upload-redaction-service", "payment-service", "analytics-service"]
+        }
+      }
+    }
+  ]
+}

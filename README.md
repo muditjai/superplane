@@ -14,4 +14,6 @@ cd aws
 docker compose up --build
 ```
 
-See [aws/README.md](./aws/README.md) for full documentation.
+## SuperPlane migration Lambdas
+
+The [`superplane-component/`](./superplane-component/) directory contains AWS Lambdas for [SuperPlane](https://docs.superplane.com/) workflows: list ECS tasks → deploy to GCP Cloud Run → check status.
