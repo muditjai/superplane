@@ -1,0 +1,132 @@
+apiVersion: "v1"
+kind: "Canvas"
+metadata:
+  id: "eb332148-c4ba-4885-b402-35aa806a46f7"
+  name: "GCP to AWS"
+  description: ""
+  isTemplate: false
+spec:
+  nodes:
+    - id: "component-node-qizfpa"
+      name: "Get GCP tasks"
+      type: "TYPE_ACTION"
+      component: "aws.lambda.runFunction"
+      configuration:
+        functionArn: "arn:aws:lambda:us-east-1:590184027793:function:superplan-migration-get-cloudrun-status"
+        payload: "{{ previous().data.payload }}"
+        region: "us-east-1"
+      metadata:
+        functionArn: "arn:aws:lambda:us-east-1:590184027793:function:superplan-migration-get-cloudrun-status"
+      position:
+        x: 1940
+        "y": 1100
+      isCollapsed: false
+      integration:
+        id: "d8ff70e5-46fb-4ce5-ba27-247fc0f8d36d"
+      paused: false
+    - id: "component-node-0ct19p"
+      name: "aws.ecs.describeService"
+      type: "TYPE_ACTION"
+      component: "aws.ecs.describeService"
+      configuration:
+        cluster: "superplane-cluster"
+        region: "us-east-1"
+        service: "superplane-app"
+      position:
+        x: 760
+        "y": 1280
+      isCollapsed: false
+      integration:
+        id: "d8ff70e5-46fb-4ce5-ba27-247fc0f8d36d"
+      paused: false
+    - id: "list-ecs-tasks-manual"
+      name: "List ECS Tasks (On Demand)"
+      type: "TYPE_ACTION"
+      component: "aws.lambda.runFunction"
+      configuration:
+        functionArn: "arn:aws:lambda:us-east-1:590184027793:function:superplan-migration-list-ecs-tasks"
+        payload:
+          cluster: "superplane-cluster"
+          region: "us-east-1"
+          service: "superplane-app"
+        region: "us-east-1"
+      metadata:
+        functionArn: "arn:aws:lambda:us-east-1:590184027793:function:superplan-migration-list-ecs-tasks"
+      position:
+        x: 760
+        "y": 920
+      isCollapsed: false
+      integration:
+        id: "d8ff70e5-46fb-4ce5-ba27-247fc0f8d36d"
+      paused: false
+    - id: "trigger-push"
+      name: "GitHub Push (main/master)"
+      type: "TYPE_TRIGGER"
+      component: "github.onPush"
+      configuration:
+        refs:
+          - type: "equals"
+            value: "refs/heads/main"
+          - type: "equals"
+            value: "refs/heads/master"
+        repository: "superplane"
+      metadata:
+        repository:
+          id: 1254559906
+          name: "superplane"
+          url: "https://github.com/muditjai/superplane"
+      position:
+        x: 72
+        "y": 744
+      isCollapsed: false
+      integration:
+        id: "d3f04139-bd36-4ce9-9954-9b0aaec0dc4f"
+      paused: false
+    - id: "start-manual"
+      name: "Manual Trigger"
+      type: "TYPE_TRIGGER"
+      component: "start"
+      configuration:
+        templates:
+          - name: "Hello World"
+            parameters: []
+            payload:
+              message: "Hello, World! "
+      position:
+        x: 120
+        "y": 1100
+      isCollapsed: false
+      paused: false
+    - id: "component-node-6cf17p"
+      name: "Deploy to GCP"
+      type: "TYPE_ACTION"
+      component: "aws.lambda.runFunction"
+      configuration:
+        functionArn: "arn:aws:lambda:us-east-1:590184027793:function:superplan-migration-deploy-to-gcp"
+        payload: "{{ previous().data.payload }}"
+        region: "us-east-1"
+      metadata:
+        functionArn: "arn:aws:lambda:us-east-1:590184027793:function:superplan-migration-deploy-to-gcp"
+      position:
+        x: 1400
+        "y": 1100
+      isCollapsed: false
+      integration:
+        id: "d8ff70e5-46fb-4ce5-ba27-247fc0f8d36d"
+      paused: false
+  edges:
+    - sourceId: "start-manual"
+      targetId: "component-node-0ct19p"
+      channel: "default"
+    - sourceId: "start-manual"
+      targetId: "list-ecs-tasks-manual"
+      channel: "default"
+    - sourceId: "list-ecs-tasks-manual"
+      targetId: "component-node-6cf17p"
+      channel: "default"
+    - sourceId: "component-node-6cf17p"
+      targetId: "component-node-qizfpa"
+      channel: "default"
+    - sourceId: "trigger-push"
+      targetId: "list-ecs-tasks-manual"
+      channel: "default"
