@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Console
+metadata:
+  canvasId: eb332148-c4ba-4885-b402-35aa806a46f7
+  name: GCP to AWS
+spec:
+  panels: []
+  layout: []
